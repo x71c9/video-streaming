@@ -14,7 +14,8 @@ script.
 ## Demo 2 [NGINX]
 
 The demo 2 create a streaming server with docker and nginx image. The
-configuration of the server is in `nginx.conf`.
+configuration of the server is in `nginx.conf`. This configuration file
+will be overwritten by the one in the cotainer since it is set as volume.
 
 1. Run `docker-nginx.sh` to start the docker contianer with the server.
 2. Run `ffmpeg-to-nginx.sh` to start streaming the camera feed to the nginx

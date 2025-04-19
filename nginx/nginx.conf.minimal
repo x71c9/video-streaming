@@ -1,0 +1,44 @@
+daemon off;
+error_log /dev/stdout info;
+
+events {
+    worker_connections 1024;
+}
+
+rtmp {
+    server {
+        listen 1935;
+        chunk_size 4096;
+
+        application hls {
+            live on;
+            hls on;
+            hls_path /opt/data/hls;
+            hls_fragment 5;
+            hls_playlist_length 10;
+            hls_fragment_naming system;
+            hls_nested on;
+            # Optional: avoid deletion of HLS files for debugging
+            # hls_cleanup off;
+        }
+    }
+}
+
+http {
+    access_log /dev/stdout combined;
+
+    server {
+        listen 80;
+
+        location /hls {
+            types {
+                application/vnd.apple.mpegurl m3u8;
+                video/mp2t ts;
+            }
+            root /opt/data;
+            add_header Cache-Control no-cache;
+            add_header Access-Control-Allow-Origin *;
+        }
+    }
+}
+

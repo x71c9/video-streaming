@@ -1,5 +1,13 @@
 # video streaming demos
 
+## Demo 0 [AWS]
+
+Parts:
+
+1. Generate HLS file with ffmpeg in local machine
+2. Upload HLS files to S3 on AWS
+3. Use Cloudfront (for security reason, not allowing s3 to be publicly expose)
+
 ## Demo 1 [MUX]
 
 Using the https://mux.com server in order to stream.

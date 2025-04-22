@@ -39,9 +39,17 @@ cleanup() {
   exit 1
 }
 
+send_start_email() {
+  /usr/local/bin/aws ses send-email \
+    --from "streaming-alert@alert.com" \
+    --destination "ToAddresses=${ALERT_EMAIL}" \
+    --message "Subject={Data=Streaming Script Started,Charset=utf-8},Body={Text={Data=The streaming script started on $(hostname) at $(date),Charset=utf-8}}" \
+    --region "${REGION}"
+}
+
 send_failure_email() {
   LOG_SNIPPET=$(tail -n 50 "$SCRIPT_DIR/streaming.log")
-    aws ses send-email \
+    /usr/local/bin/aws ses send-email \
     --from "streaming-alert@alert.com" \
     --destination "ToAddresses=${ALERT_EMAIL}" \
     --message "Subject={Data=Streaming Script Failure,Charset=utf-8},Body={Text={Data=The streaming script failed on $(hostname) at $(date).
@@ -67,6 +75,16 @@ fi
 # Start second script
 "$SCRIPT_DIR/scripts/upload-hls-to-s3.sh" >> "$SCRIPT_DIR/streaming.log" 2>&1 &
 PID2=$!
+
+# Wait a bit and check if it exited early
+sleep 5
+if ! kill -0 $PID2 2>/dev/null; then
+  echo "upload-hls-to-s3.sh exited too early"
+  cleanup
+fi
+
+echo "Both processes started successfully. Sending startup email..."
+send_start_email
 
 # Wait for both and trigger cleanup if any fails
 wait $PID1 || cleanup

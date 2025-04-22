@@ -4,22 +4,15 @@
 
 Parts:
 
-1. Generate HLS file with ffmpeg in local machine
+1. Generate HLS file with ffmpeg in local machine from a camera /dev/video0
 2. Upload HLS files to S3 on AWS
-3. Use Cloudfront (for security reason, not allowing s3 to be publicly expose)
+3. Use Cloudfront for security and caching files
 
-## Demo 1 [MUX]
+### How to make it work
 
-Using the https://mux.com server in order to stream.
 
-1. Create a Live Stream in mux.com
-2. Get the "Stream Key" from the Live Stream
-3. Set the "Stream Key" in the `ffmpeg-to-mux.sh` script
 
-The script sends only the video stream and not the audio. More info in the
-script.
-
-## Demo 2 [NGINX]
+## Demo 1 [NGINX]
 
 The demo 2 create a streaming server with docker and nginx image. The
 configuration of the server is in `nginx.conf`. This configuration file

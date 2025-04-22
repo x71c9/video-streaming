@@ -5,3 +5,5 @@ nginx/data/*
 terraform*
 .terraform*
 .env
+environment.tfvars
+backend.conf

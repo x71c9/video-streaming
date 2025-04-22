@@ -1,0 +1,6 @@
+namespace                = "carbon"
+stream_bucket_name       = "my-unique-bucket-name-carbon"
+region                   = "eu-west-1"
+allowed_origin           = "*"
+monthly_budget_usd       = "5.0"
+alert_email              = "alert@myemail.com"

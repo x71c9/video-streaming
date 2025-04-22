@@ -1,0 +1,11 @@
+# This bucket must be created beforehand manually
+bucket = "unique-bucket-name-for-the-streaming-files"
+
+# Change "carbon" with yournamespace
+key = "carbon/terraform/terraform.tfstate"
+
+# This is the region of the above bucket
+region = "eu-west-1"
+
+# Enable encryption of the bucket
+encrypt = true

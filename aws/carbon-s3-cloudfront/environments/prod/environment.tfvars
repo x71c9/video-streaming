@@ -1,6 +1,0 @@
-region                   = "eu-south-1"
-allowed_origin           = "*"
-stream_bucket_name       = "nbl7-video-streaming-prod-carbon-streaming"
-environment              = "prod"
-monthly_budget_usd       = "5.0"
-budget_alert_email       = "amministrazione@nbl7.com"

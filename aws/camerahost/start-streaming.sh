@@ -12,7 +12,7 @@
 set -e
 
 # Add timestamp to logs
-exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }') 2>&1
+exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), "[** START-STREAMING **]", $0; fflush(); }') 2>&1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -41,7 +41,7 @@ cleanup() {
 
 send_start_email() {
   /usr/local/bin/aws ses send-email \
-    --from "streaming-alert@alert.com" \
+    --from "${ALERT_EMAIL}" \
     --destination "ToAddresses=${ALERT_EMAIL}" \
     --message "Subject={Data=Streaming Script Started,Charset=utf-8},Body={Text={Data=The streaming script started on $(hostname) at $(date),Charset=utf-8}}" \
     --region "${REGION}"
@@ -50,7 +50,7 @@ send_start_email() {
 send_failure_email() {
   LOG_SNIPPET=$(tail -n 50 "$SCRIPT_DIR/streaming.log")
     /usr/local/bin/aws ses send-email \
-    --from "streaming-alert@alert.com" \
+    --from "${ALERT_EMAIL}" \
     --destination "ToAddresses=${ALERT_EMAIL}" \
     --message "Subject={Data=Streaming Script Failure,Charset=utf-8},Body={Text={Data=The streaming script failed on $(hostname) at $(date).
 

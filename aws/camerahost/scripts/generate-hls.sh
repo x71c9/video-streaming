@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Add timestamp to logs
-exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }') 2>&1
+exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), "[** GENERATE-HLS **]", $0; fflush(); }') 2>&1
 
 # Wait up to 30 seconds for /dev/video0 to be available
 for i in {1..30}; do

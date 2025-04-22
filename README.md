@@ -21,7 +21,7 @@ AWS_SECRET_ACCESS_KEY=
 
 Then:
 ```bash
-cd ./aws/s3-cloudfront/
+cd ./aws/
 
 ./terraform-apply.sh
 ```

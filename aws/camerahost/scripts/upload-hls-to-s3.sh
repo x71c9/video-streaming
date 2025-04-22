@@ -3,7 +3,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Add timestamp to logs
-exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }') 2>&1
+exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), "[** UPLOAD-HLS-TO-S3 **]", $0; fflush(); }') 2>&1
 
 set -a
 source .env

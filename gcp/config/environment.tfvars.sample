@@ -1,0 +1,5 @@
+project_id               = "<gcp-project-id>"
+stream_bucket_name       = "<unique-bucket-name>"
+region                   = "europe-east1"
+allowed_origin           = "*"
+alert_email              = "alert@email.com"

@@ -66,14 +66,14 @@ resource "google_service_account" "uploader" {
 
 resource "google_storage_bucket_iam_member" "uploader_write" {
   bucket = google_storage_bucket.stream_content_bucket.name
-  role   = "roles/storage.objectCreator"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.uploader.email}"
 }
 
 resource "null_resource" "generate_uploader_key" {
   provisioner "local-exec" {
     command = <<EOT
-      gcloud iam service-accounts keys create ./camerahost/video-streaming-uploader-credentials.json \
+      gcloud iam service-accounts keys create ./camerahost/scripts/video-streaming-uploader-credentials.json \
         --iam-account=${google_service_account.uploader.email} \
         --project=${var.project_id}
     EOT
@@ -84,12 +84,24 @@ resource "null_resource" "generate_uploader_key" {
   ]
 }
 
+output "stream_bucket_name" {
+  value = google_storage_bucket.stream_content_bucket.name
+}
+
+output "region" {
+  value = var.region
+}
+
+output "alert_email" {
+  value = var.alert_email
+}
 
 output "uploader_service_account_email" {
   value = google_service_account.uploader.email
 }
 
 output "uploader_key_path" {
-  value = "./camerahost/video-streaming-uploader-credentials.json"
+  value = "./camerahost/scripts/video-streaming-uploader-credentials.json"
   description = "Path to the generated service account key file"
 }
+

@@ -44,7 +44,7 @@ send_start_email() {
     echo "Error: MAILGUN_API_KEY is not set. Email not sent."
     return 1
   fi
-  ./send_mailgun.sh "${ALERT_EMAIL}" "Streaming Script Started" "The streaming script started on $(hostname) at $(date)."
+  ${SCRIPT_DIR}/scripts/mailgun-send-email.sh "${ALERT_EMAIL}" "Streaming Script Started" "The streaming script started on $(hostname) at $(date)."
 }
 
 send_failure_email() {
@@ -53,12 +53,14 @@ send_failure_email() {
     return 1
   fi
   LOG_SNIPPET=$(tail -n 50 "$SCRIPT_DIR/streaming.log")
-  ./send_mailgun.sh "${ALERT_EMAIL}" "Streaming Script Failure" "The streaming script failed on $(hostname) at $(date).
+  ${SCRIPT_DIR}/scripts/mailgun-send-email.sh "${ALERT_EMAIL}" "Streaming Script Failure" "The streaming script failed on $(hostname) at $(date).
 
 Last 50 lines of log:
 
 $LOG_SNIPPET"
 }
+
+trap cleanup SIGINT SIGTERM
 
 # Start first script
 "$SCRIPT_DIR/scripts/generate-hls.sh" >> "$SCRIPT_DIR/streaming.log" 2>&1 &

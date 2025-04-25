@@ -6,7 +6,7 @@ set -e
 # Generate .env file
 echo "Generating .env file..."
 
-BUCKET_NAME=$(terraform output -raw bucket_name)
+BUCKET_NAME=$(terraform output -raw stream_bucket_name)
 REGION=$(terraform output -raw region)
 ALERT_EMAIL=$(terraform output -raw alert_email)
 

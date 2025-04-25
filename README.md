@@ -37,7 +37,7 @@ In `./camerahost` there are all the files needed by the host of the camera to
 generate and upload the files to AWS. You can:
 
 ```bash
-scp -pr camerahost/. x71c9@192.168.1.40:/home/<user>/streaming/
+scp -pr camerahost/. <user>@<camerahost-ip-address>:/home/<user>/streaming/
 ```
 
 #### On the host of the camera
@@ -118,11 +118,66 @@ bash generate-dotenv.sh
 
 This will generate the `.env` file inside `./camerahost/.env`.\
 In `./camerahost` there are all the files needed by the host of the camera to
-generate and upload the files to AWS. You can:
+generate and upload the files to GCP.
+
+There are also some parameter that can be added manually, namely:
+```bash
+MAILGUN_API_KEY=
+MAILGUN_DOMAIN=
+```
+
+Since there is no easy way of sending email like for AWS, in this solution there
+is the possibility to use Mailgun. If the variables are not set, no email are
+sent, the script will just skip the email send notification.
+
+You 
 
 ```bash
-scp -pr camerahost/. x71c9@192.168.1.40:/home/<user>/streaming/
+scp -pr camerahost/. <user>@<camerahost-ip-address>:/home/<user>/streaming/
 ```
+#### On the host of the camera
+
+The host should have the following libraries:
+```
+awk
+inotifywait
+aws
+```
+Not the AWS cli under `/usr/local/bin/aws`.
+
+The update the Cron jobs:
+```bash
+crontab -e
+```
+
+Add the following line:
+```
+@reboot sleep 120 && /home/<user>/streaming/start-streaming.sh >> /home/<user>/streaming/streaming.log 2>&1
+```
+
+Reboot the system:
+```
+sudo reboot -h now
+```
+
+#### On the local machine with terraform installed
+
+You can generate and index.html file for watching the stream with:
+
+```bash
+bash generate-html.sh
+```
+
+You can destroy everything with:
+
+```bash
+./terraform-destroy.sh
+```
+
+
+
+
+
 ## Demo 3 [NGINX]
 
 The demo 3 create a streaming server with docker and nginx image. The

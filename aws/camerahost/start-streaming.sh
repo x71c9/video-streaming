@@ -61,6 +61,8 @@ $LOG_SNIPPET
     --region "${REGION}"
 }
 
+trap cleanup SIGINT SIGTERM
+
 # Start first script
 "$SCRIPT_DIR/scripts/generate-hls.sh" >> "$SCRIPT_DIR/streaming.log" 2>&1 &
 PID1=$!

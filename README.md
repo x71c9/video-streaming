@@ -1,200 +1,218 @@
-# video streaming demos
+# Video Streaming Demos
 
-## Demo 0 [AWS]
+This repository contains a series of demos for low-cost, resilient video streaming setups using various cloud providers. The goal is to stream live video from a local camera (e.g., `/dev/video0`) to the internet using HTTP Live Streaming (HLS), while keeping costs below €5/month per camera.
 
-Parts:
+Each demo shows a different deployment approach—leveraging AWS, Google Cloud Platform (GCP), or NGINX locally—aimed at balancing performance, reliability, and affordability. These setups are ideal for self-hosted surveillance, public video feeds, or experimental broadcasting.
 
-1. Generate HLS file with ffmpeg in local machine from a camera /dev/video0
-2. Upload HLS files to S3 on AWS
-3. Use Cloudfront for security and caching files, it also reduce egress costs.
+---
 
-### How to make it work
+## Demo 0 – AWS-based Streaming
 
-#### On the local machine with terraform installed
+**Overview**:
+- Capture video from `/dev/video0` using `ffmpeg`
+- Generate and upload HLS segments to an S3 bucket
+- Serve content via CloudFront (for caching, HTTPS, and reduced egress costs)
 
-Be sure you are logged on an AWS account, meaning you have the following
-variables set up:
+### Setup Instructions
+
+#### 1. On the Local Machine
+
+Ensure you have Terraform installed and are authenticated with AWS:
+
 ```bash
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_PROFILE=...
 ```
 
-Then:
+Then run from the root of this repo:
+
 ```bash
 cd ./aws/
-
 ./terraform-apply.sh
 ```
 
-After all the resources are deployed generate the `.env` file with:
+After deployment, generate the `.env` file:
 
 ```bash
 bash generate-dotenv.sh
 ```
 
-This will generate the `.env` file inside `./camerahost/.env`.\
-In `./camerahost` there are all the files needed by the host of the camera to
-generate and upload the files to AWS. You can:
+This creates `.env` inside `./camerahost/`. Transfer files to the camera host:
 
 ```bash
-scp -pr camerahost/. <user>@<camerahost-ip-address>:/home/<user>/streaming/
+scp -pr camerahost/. <user>@<camera-host-ip>:/home/<user>/streaming-aws/
 ```
 
-#### On the host of the camera
+#### 2. On the Camera Host
 
-The host should have the following libraries:
+Required tools:
+
 ```
 awk
 inotifywait
 aws
 ```
-Not the AWS cli under `/usr/local/bin/aws`.
 
-The update the Cron jobs:
+> Make sure the AWS CLI is installed in `/usr/local/bin/aws`.
+
+Set up the cron job:
+
 ```bash
 crontab -e
 ```
 
 Add the following line:
-```
-@reboot sleep 120 && /home/<user>/streaming/start-streaming.sh >> /home/<user>/streaming/streaming.log 2>&1
+
+```bash
+@reboot sleep 120 && /home/<user>/streaming-aws/start-streaming.sh >> /home/<user>/streaming-aws/streaming.log 2>&1
 ```
 
 Reboot the system:
-```
+
+```bash
 sudo reboot -h now
 ```
 
-#### On the local machine with terraform installed
+#### 3. (Optional) On the Local Machine
 
-You can generate and index.html file for watching the stream with:
+To generate an `index.html` for viewing the stream:
 
 ```bash
 bash generate-html.sh
 ```
 
-You can destroy everything with:
+To tear down the infrastructure:
 
 ```bash
 ./terraform-destroy.sh
 ```
 
-## Demo 2 [GCP]
+---
 
-Parts:
+## Demo 2 – GCP-based Streaming
 
-1. Generate HLS file with ffmpeg in local machine from a camera /dev/video0
-2. Upload HLS files to a Google Cloud Storage Bucket
-3. For production you might want to add a LoadBalancer/CDN that cache the files
-and also reduce the egress costs, however the LoadBalancer has a fixed cost of
-18€/month.
-4. Unlike AWS, in order to generate budget alert on GCP terraform must invoke
-the `billingbudgets.googleapis.com` API. Apprently this API can be called only
-by a Service Account with specific permission, and not an avarage user even with
-Admin permission. Becasue of this it has been decided to remove the budget alert
-component in GCP demo.
+**Overview**:
+- Capture video using `ffmpeg`
+- Upload HLS segments to a GCP Cloud Storage bucket
+- CDN/Load Balancer (optional in production, costs ~€18/month) [Not implemented]
+- Budget alerts were excluded due to GCP permission limitations on billing APIs
 
-### How to make it work
+### Setup Instructions
 
-#### On the local machine with terraform installed
+#### 1. On the Local Machine
 
-Be sure you are logged on an GCP account, with:
+Authenticate with GCP:
+
 ```bash
 gcloud auth login
 ```
 
-Then:
+Then run from the root of this repo:
+
 ```bash
 cd ./gcp/
-
 ./terraform-apply.sh
 ```
+The `terraform-apply.sh` also generate the
+`video-streaming-uploader-credentials.json` needed by the script
+`./camerahost/scripts/upload-hls-to-s3.ts` in order to run.
 
-After all the resources are deployed generate the `.env` file with:
+The credentials contains the token for the service account to upload file on the
+bucket.
+
+Generate the `.env` file:
 
 ```bash
 bash generate-dotenv.sh
 ```
 
-This will generate the `.env` file inside `./camerahost/.env`.\
-In `./camerahost` there are all the files needed by the host of the camera to
-generate and upload the files to GCP.
+Optionally, add Mailgun credentials for email notifications:
 
-There are also some parameter that can be added manually, namely:
 ```bash
 MAILGUN_API_KEY=
 MAILGUN_DOMAIN=
 ```
 
-Since there is no easy way of sending email like for AWS, in this solution there
-is the possibility to use Mailgun. If the variables are not set, no email are
-sent, the script will just skip the email send notification.
-
-You 
+Transfer camera host files:
 
 ```bash
-scp -pr camerahost/. <user>@<camerahost-ip-address>:/home/<user>/streaming/
+scp -pr camerahost/. <user>@<camera-host-ip>:/home/<user>/streaming-gcp/
 ```
-#### On the host of the camera
 
-The host should have the following libraries:
+#### 2. On the Camera Host
+
+Required tools:
+
 ```
 awk
 inotifywait
 aws
 ```
-Not the AWS cli under `/usr/local/bin/aws`.
 
-The update the Cron jobs:
+Set up the cron job:
+
 ```bash
 crontab -e
 ```
 
-Add the following line:
-```
-@reboot sleep 120 && /home/<user>/streaming/start-streaming.sh >> /home/<user>/streaming/streaming.log 2>&1
+Add:
+
+```bash
+@reboot sleep 120 && /home/<user>/streaming-gcp/start-streaming.sh >> /home/<user>/streaming-gcp/streaming.log 2>&1
 ```
 
-Reboot the system:
-```
+Reboot:
+
+```bash
 sudo reboot -h now
 ```
 
-#### On the local machine with terraform installed
+#### 3. (Optional) On the Local Machine
 
-You can generate and index.html file for watching the stream with:
+Generate a viewer HTML page:
 
 ```bash
 bash generate-html.sh
 ```
 
-You can destroy everything with:
+Destroy infrastructure:
 
 ```bash
 ./terraform-destroy.sh
 ```
 
+---
 
+## Demo 3 – Local Streaming with Docker + NGINX
 
+**Overview**:
+- Run a local streaming server using Docker and NGINX
+- Push the video stream (no audio) to the server via `ffmpeg`
 
+### Usage
 
-## Demo 3 [NGINX]
+1. Start the NGINX container:
 
-The demo 3 create a streaming server with docker and nginx image. The
-configuration of the server is in `nginx.conf`. This configuration file
-will be overwritten by the one in the cotainer since it is set as volume.
+```bash
+./docker-nginx.sh
+```
 
-1. Run `docker-nginx.sh` to start the docker contianer with the server.
-2. Run `ffmpeg-to-nginx.sh` to start streaming the camera feed to the nginx
-server.
+2. Start streaming the feed to NGINX:
 
-The script sends only the video stream and not the audio. More info in the
-script.
+```bash
+./ffmpeg-to-nginx.sh
+```
 
-The server is gonna serve the stream on localhost:
+> The `nginx.conf` inside the container will overwrite the local one via a volume mount.
+
+### View the Stream
+
+Stream is available at:
 
 ```bash
 http://localhost:8080/hls/live/index.m3u8
 ```
 
-There is an index.html file to see the streaming.
+Open `index.html` locally in a browser to view the stream.
+

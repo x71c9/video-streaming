@@ -8,3 +8,4 @@ terraform*
 environment.tfvars
 backend.conf
 aws/index.html
+video-streaming-uploader-credentials.json

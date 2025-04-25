@@ -6,7 +6,7 @@ Parts:
 
 1. Generate HLS file with ffmpeg in local machine from a camera /dev/video0
 2. Upload HLS files to S3 on AWS
-3. Use Cloudfront for security and caching files
+3. Use Cloudfront for security and caching files, it also reduce egress costs.
 
 ### How to make it work
 
@@ -79,10 +79,53 @@ You can destroy everything with:
 ./terraform-destroy.sh
 ```
 
+## Demo 2 [GCP]
 
-## Demo 1 [NGINX]
+Parts:
 
-The demo 2 create a streaming server with docker and nginx image. The
+1. Generate HLS file with ffmpeg in local machine from a camera /dev/video0
+2. Upload HLS files to a Google Cloud Storage Bucket
+3. For production you might want to add a LoadBalancer/CDN that cache the files
+and also reduce the egress costs, however the LoadBalancer has a fixed cost of
+18€/month.
+4. Unlike AWS, in order to generate budget alert on GCP terraform must invoke
+the `billingbudgets.googleapis.com` API. Apprently this API can be called only
+by a Service Account with specific permission, and not an avarage user even with
+Admin permission. Becasue of this it has been decided to remove the budget alert
+component in GCP demo.
+
+### How to make it work
+
+#### On the local machine with terraform installed
+
+Be sure you are logged on an GCP account, with:
+```bash
+gcloud auth login
+```
+
+Then:
+```bash
+cd ./gcp/
+
+./terraform-apply.sh
+```
+
+After all the resources are deployed generate the `.env` file with:
+
+```bash
+bash generate-dotenv.sh
+```
+
+This will generate the `.env` file inside `./camerahost/.env`.\
+In `./camerahost` there are all the files needed by the host of the camera to
+generate and upload the files to AWS. You can:
+
+```bash
+scp -pr camerahost/. x71c9@192.168.1.40:/home/<user>/streaming/
+```
+## Demo 3 [NGINX]
+
+The demo 3 create a streaming server with docker and nginx image. The
 configuration of the server is in `nginx.conf`. This configuration file
 will be overwritten by the one in the cotainer since it is set as volume.
 

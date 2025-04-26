@@ -38,11 +38,19 @@ After deployment, generate the `.env` file:
 bash generate-dotenv.sh
 ```
 
+Check if the generated file is correct:
+```bash
+cat ./camerahost/.env
+```
+
 This creates `.env` inside `./camerahost/`. Transfer files to the camera host:
 
 ```bash
 scp -pr camerahost/. <user>@<camera-host-ip>:/home/<user>/streaming-aws/
 ```
+
+The `-p` flag is too keep the permission of the files. The script must be
+executable.
 
 #### 2. On the Camera Host
 

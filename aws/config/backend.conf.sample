@@ -1,8 +1,8 @@
 # This bucket must be created beforehand manually
-bucket = "unique-bucket-name-for-the-streaming-files"
+bucket = "<unique-bucket-name-for-the-streaming-files>"
 
 # Change "carbon" with yournamespace
-key = "terraform/terraform.tfstate"
+key = "<namespace>/terraform/terraform.tfstate"
 
 # This is the region of the above bucket
 region = "eu-west-1"

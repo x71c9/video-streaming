@@ -45,4 +45,6 @@ ffmpeg -f v4l2 -framerate 30 -video_size 640x480 -i /dev/video0 \
   -hls_time 4 \
   -hls_list_size 10 \
   -hls_flags delete_segments+omit_endlist \
+  -strftime 1 \
+  -hls_segment_filename "$SCRIPT_DIR/../hls/segment_%Y%m%d_%H%M%S.ts" \
   "$SCRIPT_DIR/../hls/index.m3u8"

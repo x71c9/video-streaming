@@ -43,6 +43,35 @@ resource "aws_s3_bucket" "stream_content_bucket" {
   }
 }
 
+# Make it public
+resource "aws_s3_bucket_public_access_block" "stream_content_bucket" {
+  bucket = aws_s3_bucket.stream_content_bucket.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+# Permission for public bucket
+resource "aws_s3_bucket_policy" "public_read_policy" {
+  bucket = aws_s3_bucket.stream_content_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.stream_content_bucket.arn}/*"
+      }
+    ]
+  })
+  depends_on = [aws_s3_bucket_public_access_block.stream_content_bucket]
+}
+
 # Lifecycle, delete object after 1 day
 resource "aws_s3_bucket_lifecycle_configuration" "expire_objects" {
   bucket = aws_s3_bucket.stream_content_bucket.id
@@ -64,42 +93,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_objects" {
   }
 }
 
-# Delete all file inside the bucket when running terraform destroy
-# resource "null_resource" "empty_s3_bucket" {
-#   triggers = {
-#     bucket_name = aws_s3_bucket.stream_content_bucket.id
-#   }
-#   provisioner "local-exec" {
-#     when    = destroy
-#     command = "aws s3 rm s3://${aws_s3_bucket.stream_content_bucket.id} --recursive"
-#   }
-#   depends_on = [aws_s3_bucket.stream_content_bucket]
-# }
-
 # Allow Cloufront only to access the bucket
-resource "aws_s3_bucket_policy" "allow_cloudfront_only" {
-  bucket = aws_s3_bucket.stream_content_bucket.id
+# resource "aws_s3_bucket_policy" "allow_cloudfront_only" {
+#   bucket = aws_s3_bucket.stream_content_bucket.id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontServicePrincipal"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.stream_content_bucket.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.stream_distribution.arn
-          }
-        }
-      }
-    ]
-  })
-}
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid       = "AllowCloudFrontServicePrincipal"
+#         Effect    = "Allow"
+#         Principal = {
+#           Service = "cloudfront.amazonaws.com"
+#         }
+#         Action    = "s3:GetObject"
+#         Resource  = "${aws_s3_bucket.stream_content_bucket.arn}/*"
+#         Condition = {
+#           StringEquals = {
+#             "AWS:SourceArn" = aws_cloudfront_distribution.stream_distribution.arn
+#           }
+#         }
+#       }
+#     ]
+#   })
+# }
 
 # Bucket CORS
 resource "aws_s3_bucket_cors_configuration" "cors" {
@@ -115,78 +132,88 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
 }
 
 # Forces CloudFront to always sign requests to the origin using the specified protocol (sigv4)
-resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "${var.namespace}-s3-oac"
-  description                       = "OAC for S3 video bucket"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
+# resource "aws_cloudfront_origin_access_control" "oac" {
+#   name                              = "${var.namespace}-s3-oac"
+#   description                       = "OAC for S3 video bucket"
+#   origin_access_control_origin_type = "s3"
+#   signing_behavior                  = "always"
+#   signing_protocol                  = "sigv4"
+# }
 
 # Define Cloudfront distribution: cache everything except /stream/index.m3u8
-resource "aws_cloudfront_distribution" "stream_distribution" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "Video streaming CDN"
-  default_root_object = "stream/index.m3u8"
+# resource "aws_cloudfront_distribution" "stream_distribution" {
+#   enabled             = true
+#   is_ipv6_enabled     = true
+#   comment             = "Video streaming CDN"
+#   default_root_object = "stream/index.m3u8"
 
-  origin {
-    domain_name = aws_s3_bucket.stream_content_bucket.bucket_regional_domain_name
-    origin_id   = "${var.namespace}-s3-video-origin"
+#   origin {
+#     domain_name = aws_s3_bucket.stream_content_bucket.bucket_regional_domain_name
+#     origin_id   = "${var.namespace}-s3-video-origin"
 
-    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
-  }
+#     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
+#   }
 
-  # Cache everything 1h
-  default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "${var.namespace}-s3-video-origin"
-    viewer_protocol_policy = "redirect-to-https"
+#   # Cache everything 1h
+#   default_cache_behavior {
+#     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+#     cached_methods   = ["GET", "HEAD"]
+#     target_origin_id = "${var.namespace}-s3-video-origin"
+#     viewer_protocol_policy = "redirect-to-https"
 
-    forwarded_values {
-      query_string = false
-      headers      = [] # <= Don't forward headers unless necessary
-      cookies {
-        forward = "none"
-      }
-    }
-    compress    = true
-    min_ttl     = 3600
-    default_ttl = 3600
-    max_ttl     = 3600
-  }
+#     forwarded_values {
+#       query_string = false
+#       headers      = [] # <= Don't forward headers unless necessary
+#       cookies {
+#         forward = "none"
+#       }
+#     }
+#     compress    = true
+#     min_ttl     = 3600
+#     default_ttl = 3600
+#     max_ttl     = 3600
+#   }
 
-  # Do not cache the manifest index.m3u8
-  ordered_cache_behavior {
-    path_pattern     = "/stream/index.m3u8"
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "${var.namespace}-s3-video-origin"
-    viewer_protocol_policy = "redirect-to-https"
-    forwarded_values {
-      query_string = false
-      headers      = ["Origin"]
-      cookies {
-        forward = "none"
-      }
-    }
-    min_ttl     = 0
-    default_ttl = 0
-    max_ttl     = 0
-    compress = true
-  }
+#   # Do not cache the manifest index.m3u8
+#   ordered_cache_behavior {
+#     path_pattern     = "/stream/index.m3u8"
+#     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+#     cached_methods   = ["GET", "HEAD"]
+#     target_origin_id = "${var.namespace}-s3-video-origin"
+#     viewer_protocol_policy = "redirect-to-https"
+#     forwarded_values {
+#       query_string = false
+#       headers      = ["Origin"]
+#       cookies {
+#         forward = "none"
+#       }
+#     }
+#     min_ttl     = 0
+#     default_ttl = 0
+#     max_ttl     = 0
+#     compress = true
+#   }
 
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
+#   restrictions {
+#     geo_restriction {
+#       restriction_type = "none"
+#     }
+#   }
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-}
+#   viewer_certificate {
+#     cloudfront_default_certificate = true
+#   }
+
+#   custom_error_response {
+#     error_code            = 403
+#     error_caching_min_ttl = 0
+#   }
+
+#   custom_error_response {
+#     error_code            = 404
+#     error_caching_min_ttl = 0
+#   }
+# }
 
 # Define IAM user that will upload the files to S3
 resource "aws_iam_user" "s3_upload_user" {
@@ -255,9 +282,9 @@ resource "aws_ses_email_identity" "alert_email_verification" {
   email = var.alert_email
 }
 
-output "cloudfront_url" {
-  value = aws_cloudfront_distribution.stream_distribution.domain_name
-}
+# output "cloudfront_url" {
+#   value = aws_cloudfront_distribution.stream_distribution.domain_name
+# }
 
 output "s3_upload_aws_access_key_id" {
   value       = aws_iam_access_key.s3_upload_user_key.id

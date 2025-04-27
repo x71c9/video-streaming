@@ -118,17 +118,26 @@ delete_old_segments(){
   CUTOFF=$(date -u -d "-${BUCKET_OBJECTS_EXPIRY_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")
 
   echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF]..."
+  echo "/usr/local/bin/aws s3api list-objects-v2 \
+    --region \"$REGION\" \
+    --bucket \"$BUCKET_NAME\" \
+    --query \"Contents[?LastModified<=\`$CUTOFF\`].[Key]\" \
+    --no-paginate \
+    --output text"
   OBJECTS=$(/usr/local/bin/aws s3api list-objects-v2 \
     --region "$REGION" \
     --bucket "$BUCKET_NAME" \
     --query "Contents[?LastModified<=\`$CUTOFF\`].[Key]" \
     --no-paginate \
     --output text)
-
+  echo $OBJECTS
   if [ -z "$OBJECTS" ]; then
     echo "No objects older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds to delete."
   else
     BATCH_DELETE_JSON=$(printf '{"Objects":[%s]}' "$(echo "$OBJECTS" | awk '{printf "{\"Key\":\"%s\"},", $0}' | sed 's/,$//')")
+    echo "/usr/local/bin/aws s3api delete-objects \
+      --bucket \"$BUCKET_NAME\" \
+      --delete \"$BATCH_DELETE_JSON\""
     AWS_PAGER="" /usr/local/bin/aws s3api delete-objects \
       --bucket "$BUCKET_NAME" \
       --delete "$BATCH_DELETE_JSON"

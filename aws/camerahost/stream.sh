@@ -28,7 +28,6 @@ source $SCRIPT_DIR/.env
 set +a
 
 LOG_FILE_PATH="$SCRIPT_DIR/stream.log"
-LOG_MAX_LINES=1000
 
 HLS_DIR="$SCRIPT_DIR/hls"
 SNAPSHOT_TMP_DIR="$SCRIPT_DIR/hls-tmp"
@@ -39,16 +38,12 @@ VIDEO_HEIGHT=480
 VIDEO_FONT_SIZE=$(( VIDEO_HEIGHT / 53 ))
 
 BUCKET_STREAM_PREFIX="/stream"
-BUCKET_OBJECTS_EXPIRY_SECONDS=240
+BUCKET_OBJECTS_EXPIRY_SECONDS=480
 UPLOAD_INTERVAL_SECONDS=45
 
 init_log_file(){
-  touch "$LOG_FILE_PATH"
-  LINES=$(wc -l < "$LOG_FILE_PATH")
-  if [ "$LINES" -gt "$LOG_MAX_LINES" ]; then
-    echo "Trimming log file to last $LOG_MAX_LINES lines..."
-    tail -n "$LOG_MAX_LINES" "$LOG_FILE_PATH" > "$LOG_FILE_PATH.tmp" && mv "$LOG_FILE_PATH.tmp" "$LOG_FILE_PATH"
-  fi
+  rm -f $LOG_FILE_PATH
+  touch $LOG_FILE_PATH
 }
 
 init_directories(){
@@ -117,6 +112,29 @@ start_ffmpeg(){
   FFMPEG_PID=$!
 }
 
+delete_old_segments(){
+
+  CUTOFF=$(date -u -d "-${BUCKET_OBJECTS_EXPIRY_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")
+
+  echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF]..."
+  OBJECTS=$(/usr/local/bin/aws s3api list-objects-v2 \
+    --region "$REGION" \
+    --bucket "$BUCKET_NAME" \
+    --query "Contents[?LastModified<=\`$CUTOFF\`].[Key]" \
+    --no-paginate \
+    --output text)
+
+  if [ -z "$OBJECTS" ]; then
+    echo "No objects older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds to delete."
+  else
+    BATCH_DELETE_JSON=$(printf '{"Objects":[%s]}' "$(echo "$OBJECTS" | awk '{printf "{\"Key\":\"%s\"},", $0}' | sed 's/,$//')")
+    AWS_PAGER="" /usr/local/bin/aws s3api delete-objects \
+      --bucket "$BUCKET_NAME" \
+      --delete "$BATCH_DELETE_JSON"
+  fi
+
+}
+
 start_upload(){
 
   echo "************ [$(date)] start_upload"
@@ -159,27 +177,18 @@ start_upload(){
       --content-type "application/vnd.apple.mpegurl" \
       --only-show-errors
 
-    CUTOFF=$(date -u -d "-${BUCKET_OBJECTS_EXPIRY_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")
-
-    echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF]..."
-    OBJECTS=$(/usr/local/bin/aws s3api list-objects-v2 \
-      --region "$REGION" \
-      --bucket "$BUCKET_NAME" \
-      --query "Contents[?LastModified<=\`$CUTOFF\`].[Key]" \
-      --no-paginate \
-      --output text)
-
-    if [ -z "$OBJECTS" ]; then
-      echo "No objects older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds to delete."
-    else
-      BATCH_DELETE_JSON=$(printf '{"Objects":[%s]}' "$(echo "$OBJECTS" | awk '{printf "{\"Key\":\"%s\"},", $0}' | sed 's/,$//')")
-      AWS_PAGER="" /usr/local/bin/aws s3api delete-objects \
-        --bucket "$BUCKET_NAME" \
-        --delete "$BATCH_DELETE_JSON"
-    fi
+    delete_old_segments &
 
   done
 
+}
+
+truncate_logs(){
+  while true; do
+    sleep $((60 * 60 * 24))
+    truncate -s 0 $LOG_FILE_PATH
+    echo "$(date): Truncated $LOG_FILE_PATH" >> $LOG_FILE_PATH
+  done
 }
 
 # --------------------------
@@ -199,5 +208,7 @@ check_video
 start_ffmpeg &
 
 start_upload
+
+truncate_logs &
 
 trap - ERR

@@ -42,8 +42,9 @@ BUCKET_OBJECTS_EXPIRY_SECONDS=480
 UPLOAD_INTERVAL_SECONDS=45
 
 init_log_file(){
-  rm -f $LOG_FILE_PATH
   touch $LOG_FILE_PATH
+  truncate -s 0 $LOG_FILE_PATH
+  echo "------------ $(date): Init Log Truncated" >> $LOG_FILE_PATH
 }
 
 init_directories(){
@@ -138,6 +139,9 @@ delete_old_segments(){
 start_upload(){
 
   echo "************ [$(date)] start_upload"
+
+  check_video
+
   export AWS_MAX_CONCURRENT_REQUESTS=20
   export AWS_S3_MULTIPART_THRESHOLD=67108864    # 64MB
   export AWS_S3_MULTIPART_CHUNKSIZE=16777216    # 16MB
@@ -185,9 +189,9 @@ start_upload(){
 
 truncate_logs(){
   while true; do
-    sleep $((60 * 60 * 24))
+    sleep 86400
     truncate -s 0 $LOG_FILE_PATH
-    echo "$(date): Truncated $LOG_FILE_PATH" >> $LOG_FILE_PATH
+    echo "------------ $(date): Daily Log Truncated" >> $LOG_FILE_PATH
   done
 }
 
@@ -201,14 +205,15 @@ init_directories
 
 init_log_file
 
-trap 'cleanup_on_error' ERR
-
-check_video
-
 start_ffmpeg &
-
-start_upload
+PID1=$!
 
 truncate_logs &
+PID2=$!
 
-trap - ERR
+start_upload &
+PID3=$!
+
+wait $PID1 || cleanup_on_error
+wait $PID2 || cleanup_on_error
+wait $PID3 || cleanup_on_error

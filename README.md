@@ -54,11 +54,10 @@ executable.
 
 #### 2. On the Camera Host
 
-Required tools:
+Required installed tools:
 
 ```
 awk
-inotifywait
 aws
 ```
 
@@ -73,7 +72,7 @@ crontab -e
 Add the following line:
 
 ```bash
-@reboot sleep 120 && /home/<user>/streaming-aws/start-streaming.sh >> /home/<user>/streaming-aws/streaming.log 2>&1
+@reboot sleep 120 && /home/<user>/streaming-aws/stream.sh >> /home/<user>/streaming-aws/stream.log 2>&1
 ```
 
 Reboot the system:

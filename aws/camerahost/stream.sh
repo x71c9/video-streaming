@@ -108,8 +108,9 @@ start_ffmpeg(){
     -hls_list_size 30 \
     -hls_flags delete_segments+omit_endlist+independent_segments \
     -strftime 1 \
+    -loglevel error \
     -hls_segment_filename "$HLS_DIR/segment_%Y%m%d_%H%M%S.ts" \
-    "$HLS_DIR/index.m3u8"
+    "$HLS_DIR/index.m3u8" &
   FFMPEG_PID=$!
 }
 

@@ -182,6 +182,8 @@ start_upload(){
       --no-progress \
       --exact-timestamps
 
+    echo "[*] $(date) Segments uploaded to S3"
+
     sleep 10
 
     echo "[*] Uploading manifest (index.m3u8) to S3..."
@@ -190,6 +192,8 @@ start_upload(){
       --cache-control "no-cache, no-store, must-revalidate" \
       --content-type "application/vnd.apple.mpegurl" \
       --only-show-errors
+
+    echo "[*] $(date) Manifest uploaded to S3"
 
     delete_old_segments &
 

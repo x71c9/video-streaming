@@ -153,8 +153,8 @@ Required tools:
 
 ```
 awk
-inotifywait
 aws
+jq
 ```
 
 Set up the cron job:

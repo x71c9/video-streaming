@@ -73,7 +73,7 @@ resource "google_storage_bucket_iam_member" "uploader_write" {
 resource "null_resource" "generate_uploader_key" {
   provisioner "local-exec" {
     command = <<EOT
-      gcloud iam service-accounts keys create ./camerahost/scripts/video-streaming-uploader-credentials.json \
+      gcloud iam service-accounts keys create ./camerahost/video-streaming-uploader-credentials.json \
         --iam-account=${google_service_account.uploader.email} \
         --project=${var.project_id}
     EOT
@@ -101,7 +101,7 @@ output "uploader_service_account_email" {
 }
 
 output "uploader_key_path" {
-  value = "./camerahost/scripts/video-streaming-uploader-credentials.json"
+  value = "./camerahost/video-streaming-uploader-credentials.json"
   description = "Path to the generated service account key file"
 }
 

@@ -40,6 +40,14 @@ VIDEO_FONT_SIZE=$(( VIDEO_HEIGHT / 53 ))
 BUCKET_STREAM_PREFIX="/stream"
 BUCKET_OBJECTS_EXPIRY_SECONDS=480
 UPLOAD_INTERVAL_SECONDS=45
+BUCKET_PATH="gs://$BUCKET_NAME${BUCKET_STREAM_PREFIX}"
+
+BUCKET_OBJECTS_EXPIRY_SECONDS=480
+UPLOAD_INTERVAL_SECONDS=45
+
+export GOOGLE_APPLICATION_CREDENTIALS="$SCRIPT_DIR/video-streaming-uploader-credentials.json"
+gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+echo "Using credentials from: $GOOGLE_APPLICATION_CREDENTIALS"
 
 init_log_file(){
   touch $LOG_FILE_PATH
@@ -52,20 +60,31 @@ init_directories(){
   mkdir -p "$HLS_DIR" "$SNAPSHOT_TMP_DIR"
 }
 
+mailgun_send(){
+  MAILGUN_API_BASE="https://api.eu.mailgun.net/v3/${MAILGUN_DOMAIN}"
+  FROM="Mailgun <mailgun@${MAILGUN_DOMAIN}>"
+  TO=$1
+  SUBJECT=$2
+  TEXT=$3
+  curl -s --user "api:${MAILGUN_API_KEY}" \
+      "${MAILGUN_API_BASE}/messages" \
+      -F from="${FROM}" \
+      -F to="${TO}" \
+      -F subject="${SUBJECT}" \
+      -F text="${TEXT}"
+}
+
 send_failure_email() {
   echo "************ [$(date)] send_failure_email"
   if [ -n "${ALERT_EMAIL:-}" ]; then
     LOG_SNIPPET=$(tail -n 50 "$LOG_FILE_PATH")
-    /usr/local/bin/aws ses send-email \
-      --from "${ALERT_EMAIL}" \
-      --destination "ToAddresses=${ALERT_EMAIL}" \
-      --message "Subject={Data=Streaming Script Failure,Charset=utf-8},Body={Text={Data=The streaming script failed on $(hostname) at $(date).
 
-  Last 50 lines of log:
+    mailgun_send $ALERT_EMAIL "Streaming Script Failure" "The streaming script failed on $(hostname) at $(date).
 
-  $LOG_SNIPPET
-  ,Charset=utf-8}}" \
-      --region "${REGION}"
+Last 50 lines of log:
+
+$LOG_SNIPPET
+,Charset=utf-8}}"
   fi
 }
 
@@ -116,33 +135,33 @@ start_ffmpeg(){
 
 delete_old_segments(){
 
-  CUTOFF=$(date -u -d "-${BUCKET_OBJECTS_EXPIRY_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")
+  CUTOFF_DATE=$(date -u -d "@$(( $(date +%s) - BUCKET_OBJECTS_EXPIRY_SECONDS ))" +"%Y-%m-%dT%H:%M:%SZ")
 
-  echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF]..."
-  echo "/usr/local/bin/aws s3api list-objects-v2 \
-    --region \"$REGION\" \
-    --bucket \"$BUCKET_NAME\" \
-    --query \"Contents[?LastModified<=\`$CUTOFF\`].[Key]\" \
-    --no-paginate \
-    --output text"
-  OBJECTS=$(/usr/local/bin/aws s3api list-objects-v2 \
-    --region "$REGION" \
-    --bucket "$BUCKET_NAME" \
-    --query "Contents[?LastModified<=\`$CUTOFF\`].[Key]" \
-    --no-paginate \
-    --output text)
-  echo $OBJECTS
-  if [ -z "$OBJECTS" ]; then
-    echo "No objects older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds to delete."
-  else
-    BATCH_DELETE_JSON=$(printf '{"Objects":[%s]}' "$(echo "$OBJECTS" | awk '{printf "{\"Key\":\"%s\"},", $0}' | sed 's/,$//')")
-    echo "/usr/local/bin/aws s3api delete-objects \
-      --bucket \"$BUCKET_NAME\" \
-      --delete \"$BATCH_DELETE_JSON\""
-    AWS_PAGER="" /usr/local/bin/aws s3api delete-objects \
-      --bucket "$BUCKET_NAME" \
-      --delete "$BATCH_DELETE_JSON"
+  echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF_DATE]..."
+
+  # === Step 1: List all objects ===
+  echo "[*] Fetching object list..."
+  OBJECTS_JSON=$(gcloud storage objects list "gs://$BUCKET_NAME" --format=json)
+  echo "[*] Raw list response:"
+  echo "$OBJECTS_JSON" | jq '.'
+
+  # === Step 2: Filter old objects ===
+  echo "[*] Filtering objects older than cutoff time..."
+  OLD_OBJECTS=$(echo "$OBJECTS_JSON" | jq -r --arg cutoff "$CUTOFF_DATE" '.[] | select(.update < $cutoff) | .name')
+
+  if [ -z "$OLD_OBJECTS" ]; then
+    echo "[*] No objects older than $CUTOFF_DATE found."
+    exit 0
   fi
+
+  echo "[*] Objects to delete:"
+  echo "$OLD_OBJECTS"
+
+  # === Step 3: Delete filtered objects ===
+  while IFS= read -r OBJECT_NAME; do
+    echo "[*] Deleting: gs://$BUCKET_NAME/$OBJECT_NAME"
+    gcloud storage objects delete "gs://$BUCKET_NAME/$OBJECT_NAME" --quiet
+  done <<< "$OLD_OBJECTS"
 
 }
 
@@ -151,10 +170,6 @@ start_upload(){
   echo "************ [$(date)] start_upload"
 
   check_video
-
-  export AWS_MAX_CONCURRENT_REQUESTS=20
-  export AWS_S3_MULTIPART_THRESHOLD=67108864    # 64MB
-  export AWS_S3_MULTIPART_CHUNKSIZE=16777216    # 16MB
 
   while true; do
 
@@ -180,27 +195,15 @@ start_upload(){
       fi
     done
 
-    echo "[*] Uploading .ts segments to S3..."
-    /usr/local/bin/aws s3 sync "$SNAPSHOT_TMP_DIR" "s3://$BUCKET_NAME$BUCKET_STREAM_PREFIX" \
-      --region "$REGION" \
-      --exclude "*" --include "*.ts" \
-      --only-show-errors \
-      --no-guess-mime-type \
-      --no-progress \
-      --exact-timestamps
-
-    echo "[*] $(date) Segments uploaded to S3"
+    echo "[*] Uploading .ts segments to the bucket..."
+    gcloud storage rsync --exclude "index.m3u8" --delete-unmatched-destination-objects -r "$SNAPSHOT_TMP_DIR/." $BUCKET_PATH
+    echo "[*] $(date) Segments uploaded to the bucket"
 
     sleep 10
 
-    echo "[*] Uploading manifest (index.m3u8) to S3..."
-    /usr/local/bin/aws s3 cp "$SNAPSHOT_TMP_DIR/index.m3u8" "s3://$BUCKET_NAME$BUCKET_STREAM_PREFIX/index.m3u8" \
-      --region "$REGION" \
-      --cache-control "no-cache, no-store, must-revalidate" \
-      --content-type "application/vnd.apple.mpegurl" \
-      --only-show-errors
-
-    echo "[*] $(date) Manifest uploaded to S3"
+    echo "[*] Uploading manifest (index.m3u8) to the bucket..."
+    gcloud storage cp --cache-control="no-store" "$SNAPSHOT_TMP_DIR/index.m3u8" "$BUCKET_PATH/index.m3u8"
+    echo "[*] $(date) Manifest uploaded to the bucket"
 
     delete_old_segments &
 

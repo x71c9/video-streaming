@@ -52,7 +52,7 @@ echo "Using credentials from: $GOOGLE_APPLICATION_CREDENTIALS"
 init_log_file(){
   touch $LOG_FILE_PATH
   truncate -s 0 $LOG_FILE_PATH
-  echo "------------ $(date): Init Log Truncated" >> $LOG_FILE_PATH
+  echo "********************** [$(date)] Init Log Truncated" >> $LOG_FILE_PATH
 }
 
 init_directories(){
@@ -128,7 +128,7 @@ start_ffmpeg(){
     -hls_flags delete_segments+omit_endlist+independent_segments \
     -strftime 1 \
     -loglevel error \
-    -hls_segment_filename "$HLS_DIR/segment_%Y%m%d_%H%M%S.ts" \
+    -hls_segment_filename "$HLS_DIR/segment_%Y%m%d_%H%M%S_%03d.ts" \
     "$HLS_DIR/index.m3u8" &
   FFMPEG_PID=$!
 }

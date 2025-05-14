@@ -213,7 +213,7 @@ start_upload(){
 
 truncate_logs(){
   while true; do
-    sleep 86400
+    sleep 864000 # 10 gg
     truncate -s 0 $LOG_FILE_PATH
     echo "------------ $(date): Daily Log Truncated" >> $LOG_FILE_PATH
   done

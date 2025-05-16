@@ -160,7 +160,10 @@ delete_old_segments(){
   # === Step 3: Delete filtered objects ===
   while IFS= read -r OBJECT_NAME; do
     echo "[*] Deleting: gs://$BUCKET_NAME/$OBJECT_NAME"
-    gcloud storage objects delete "gs://$BUCKET_NAME/$OBJECT_NAME" --quiet
+    if ! gcloud storage objects delete "gs://$BUCKET_NAME/$OBJECT_NAME" --quiet; then
+      echo "[ERROR] Failed to delete object gs://$BUCKET_NAME/$OBJECT_NAME" >> "$LOG_FILE_PATH"
+      send_failure_email
+    fi
   done <<< "$OLD_OBJECTS"
 
 }
@@ -196,13 +199,21 @@ start_upload(){
     done
 
     echo "[*] Uploading .ts segments to the bucket..."
-    gcloud storage rsync --exclude "index.m3u8" --delete-unmatched-destination-objects -r "$SNAPSHOT_TMP_DIR/." $BUCKET_PATH
+    if ! gcloud storage rsync --exclude "index.m3u8" --delete-unmatched-destination-objects -r "$SNAPSHOT_TMP_DIR/." $BUCKET_PATH; then
+      echo "[ERROR] Failed to sync .ts segments to the bucket" >> "$LOG_FILE_PATH"
+      send_failure_email
+      exit 1
+    fi
     echo "[*] $(date) Segments uploaded to the bucket"
 
     sleep 10
 
     echo "[*] Uploading manifest (index.m3u8) to the bucket..."
-    gcloud storage cp --cache-control="no-store" "$SNAPSHOT_TMP_DIR/index.m3u8" "$BUCKET_PATH/index.m3u8"
+    if ! gcloud storage cp --cache-control="no-store" "$SNAPSHOT_TMP_DIR/index.m3u8" "$BUCKET_PATH/index.m3u8"; then
+      echo "[ERROR] Failed to upload index.m3u8 to the bucket" >> "$LOG_FILE_PATH"
+      send_failure_email
+      exit 1
+    fi
     echo "[*] $(date) Manifest uploaded to the bucket"
 
     delete_old_segments &

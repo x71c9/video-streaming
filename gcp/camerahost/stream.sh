@@ -49,6 +49,11 @@ export GOOGLE_APPLICATION_CREDENTIALS="$SCRIPT_DIR/video-streaming-uploader-cred
 gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
 echo "Using credentials from: $GOOGLE_APPLICATION_CREDENTIALS"
 
+# This tells the gcloud CLI to not use the shared credential database and
+# instead use only the credentials file you specified. This avoids the SQLite
+# locking issue altogether.
+export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE="$GOOGLE_APPLICATION_CREDENTIALS"
+
 init_log_file(){
   touch $LOG_FILE_PATH
   truncate -s 0 $LOG_FILE_PATH

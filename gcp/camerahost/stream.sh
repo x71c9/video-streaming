@@ -83,13 +83,26 @@ send_failure_email() {
   if [ -n "${ALERT_EMAIL:-}" ]; then
     LOG_SNIPPET=$(tail -n 50 "$LOG_FILE_PATH")
 
-    mailgun_send $ALERT_EMAIL "Streaming Script Failure" "The streaming script failed on $(hostname) at $(date).
-
-Last 50 lines of log:
-
-$LOG_SNIPPET
-,Charset=utf-8}}"
+    mailgun_send $ALERT_EMAIL "Streaming Script Failure" "The streaming script failed on $(hostname) at $(date).\n\nLast 50 lines of log:\n\n$LOG_SNIPPET"
   fi
+}
+
+retry_gcloud() {
+  local retries=5
+  local count=0
+  local delay=60
+  until "$@"; do
+    exit_code=$?
+    count=$((count + 1))
+    if [ $count -lt $retries ]; then
+      echo "Command failed with exit code $exit_code. Retrying in $delay seconds..."
+      sleep $delay
+    else
+      echo "Command failed after $retries attempts."
+      return $exit_code
+    fi
+  done
+  return 0
 }
 
 check_video(){
@@ -141,11 +154,17 @@ delete_old_segments(){
 
   CUTOFF_DATE=$(date -u -d "@$(( $(date +%s) - BUCKET_OBJECTS_EXPIRY_SECONDS ))" +"%Y-%m-%dT%H:%M:%SZ")
 
+
   echo "[*] Deleting files older than $BUCKET_OBJECTS_EXPIRY_SECONDS seconds [$BUCKET_NAME] [$REGION] [$CUTOFF_DATE]..."
 
   # === Step 1: List all objects ===
   echo "[*] Fetching object list..."
-  OBJECTS_JSON=$(gcloud storage objects list "gs://$BUCKET_NAME" --format=json)
+  if ! OBJECTS_JSON=$(retry_gcloud gcloud storage objects list "gs://$BUCKET_NAME" --format=json); then
+    echo "[ERROR] Failed to list objects from gs://$BUCKET_NAME" >> "$LOG_FILE_PATH"
+    send_failure_email
+    return 1
+  fi
+
   echo "[*] Raw list response:"
   echo "$OBJECTS_JSON" | jq '.'
 
@@ -155,7 +174,7 @@ delete_old_segments(){
 
   if [ -z "$OLD_OBJECTS" ]; then
     echo "[*] No objects older than $CUTOFF_DATE found."
-    exit 0
+    return 0
   fi
 
   echo "[*] Objects to delete:"
@@ -164,7 +183,7 @@ delete_old_segments(){
   # === Step 3: Delete filtered objects ===
   while IFS= read -r OBJECT_NAME; do
     echo "[*] Deleting: gs://$BUCKET_NAME/$OBJECT_NAME"
-    if ! gcloud storage objects delete "gs://$BUCKET_NAME/$OBJECT_NAME" --quiet; then
+    if ! retry_gcloud gcloud storage objects delete "gs://$BUCKET_NAME/$OBJECT_NAME" --quiet; then
       echo "[ERROR] Failed to delete object gs://$BUCKET_NAME/$OBJECT_NAME" >> "$LOG_FILE_PATH"
       send_failure_email
     fi
@@ -203,7 +222,7 @@ start_upload(){
     done
 
     echo "[*] Uploading .ts segments to the bucket..."
-    if ! gcloud storage rsync --exclude "index.m3u8" --delete-unmatched-destination-objects -r "$SNAPSHOT_TMP_DIR/." $BUCKET_PATH; then
+    if ! retry_gcloud gcloud storage rsync --exclude "index.m3u8" --delete-unmatched-destination-objects -r "$SNAPSHOT_TMP_DIR/." $BUCKET_PATH; then
       echo "[ERROR] Failed to sync .ts segments to the bucket" >> "$LOG_FILE_PATH"
       send_failure_email
       exit 1
@@ -213,7 +232,7 @@ start_upload(){
     sleep 10
 
     echo "[*] Uploading manifest (index.m3u8) to the bucket..."
-    if ! gcloud storage cp --cache-control="no-store" "$SNAPSHOT_TMP_DIR/index.m3u8" "$BUCKET_PATH/index.m3u8"; then
+    if ! retry_gcloud gcloud storage cp --cache-control="no-store" "$SNAPSHOT_TMP_DIR/index.m3u8" "$BUCKET_PATH/index.m3u8"; then
       echo "[ERROR] Failed to upload index.m3u8 to the bucket" >> "$LOG_FILE_PATH"
       send_failure_email
       exit 1
